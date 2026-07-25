@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoice Detail</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <span class="brand">Invoices</span>
+    <nav>
+      <a href="index.html">Upload</a>
+      <a href="invoices.html" class="active">Invoices</a>
+    </nav>
+  </header>
+
+  <main>
+    <p><a href="invoices.html">← Back to invoices</a></p>
+    <div id="content">
+      <p class="muted"><span class="spinner"></span> Loading…</p>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="detail.js"></script>
+</body>
+</html>

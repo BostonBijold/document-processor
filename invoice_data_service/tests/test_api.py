@@ -60,6 +60,77 @@ def test_get_invoice_by_id(api_client):
     assert resp.json()["invoice_number"] == "INV-001"
 
 
+def test_update_fields_edits_and_recomputes_warning(api_client):
+    created = post_invoice(api_client).json()
+
+    resp = api_client.patch(
+        f"/invoices/{created['id']}",
+        json={
+            "vendor_name": "Acme Corp (corrected)",
+            "invoice_number": "INV-001",
+            "issue_date": "2026-07-01",
+            "due_date": "2026-12-01",
+            "line_items": [
+                {"description": "Widget", "quantity": 2, "unit_price": 10.0, "amount": 20.0}
+            ],
+            "subtotal": 20.0,
+            "tax": 0.0,
+            "total": 999.0,  # deliberately wrong -- should trip the warning
+            "currency": "USD",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["vendor_name"] == "Acme Corp (corrected)"
+    assert body["total"] == 999.0
+    assert body["validation_warning"] is not None
+
+    # status/paid_date/document_content_type are untouched by this endpoint
+    assert body["status"] == "unpaid"
+
+
+def test_update_fields_clears_warning_once_fixed(api_client):
+    # POST /invoices stores whatever validation_warning Extraction sent --
+    # it doesn't compute one itself, so seed it explicitly here.
+    created = post_invoice(
+        api_client, {**VALID_EXTRACTION, "total": 999.0, "validation_warning": "totals don't match"}
+    ).json()
+    assert created["validation_warning"] == "totals don't match"
+
+    resp = api_client.patch(
+        f"/invoices/{created['id']}",
+        json={**VALID_EXTRACTION, "total": 20.0},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["validation_warning"] is None
+
+
+def test_update_fields_not_found_returns_404(api_client):
+    resp = api_client.patch(f"/invoices/{'0' * 24}", json=VALID_EXTRACTION)
+    assert resp.status_code == 404
+
+
+def test_update_fields_missing_required_field_returns_422(api_client):
+    created = post_invoice(api_client).json()
+    bad = {**VALID_EXTRACTION}
+    del bad["total"]
+    resp = api_client.patch(f"/invoices/{created['id']}", json=bad)
+    assert resp.status_code == 422
+
+
+def test_get_invoice_document_returns_original_bytes(api_client):
+    created = post_invoice(api_client).json()
+    resp = api_client.get(f"/invoices/{created['id']}/document")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content == b"%PDF-1.4 fake"
+
+
+def test_get_invoice_document_not_found_returns_404(api_client):
+    resp = api_client.get(f"/invoices/{'0' * 24}/document")
+    assert resp.status_code == 404
+
+
 def test_get_invoice_not_found_returns_404(api_client):
     resp = api_client.get(f"/invoices/{'0' * 24}")
     assert resp.status_code == 404

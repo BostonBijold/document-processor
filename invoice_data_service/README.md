@@ -40,6 +40,21 @@ http://localhost:8000/docs.
   `skip=0, limit=20`, max `limit=100`). Returns `{items, total, skip, limit}`.
 - `GET /invoices/{id}` -- single invoice. `404` if not found, `400` if `id`
   isn't a valid ObjectId.
+- `GET /invoices/{id}/document` -- streams back the original uploaded file
+  (`document_binary`) with its stored `document_content_type` as the
+  response's `Content-Type`. Added for the frontend's document preview
+  panel. `404` / `400` as above.
+- `PATCH /invoices/{id}` -- body is every extracted field (`vendor_name`,
+  `invoice_number`, `issue_date`, `due_date`, `line_items`, `subtotal`,
+  `tax`, `total`, `currency` -- same shape as the `POST` body minus
+  `validation_warning`). Not partial: the frontend's edit form always
+  submits all of them together. `status`/`paid_date` are untouched --
+  those go through `PATCH /invoices/{id}/status` instead. Recomputes
+  `validation_warning` from the submitted totals (see below), so fixing a
+  bad total in the edit form also clears the warning. `404` if not found,
+  `422` if a required field is missing (this endpoint takes a plain JSON
+  body, so FastAPI's default validation error applies, unlike `POST`'s
+  `400` -- see design decisions).
 - `PATCH /invoices/{id}/status` -- body `{"status": "paid" | "unpaid", "paid_date": "...")?}`.
   Setting `"paid"` without `paid_date` stamps it with the current time;
   setting `"unpaid"` clears `paid_date`. `404` / `400` as above.
@@ -66,10 +81,20 @@ requires storing the raw file binary (`document_binary`) alongside the
 extracted fields, and JSON can't carry binary cleanly. `data` carries the
 Extraction-shaped JSON as a form field; `file` carries the binary.
 
-**`document_binary` is never returned in API responses** -- only
-`document_content_type` is. Raw bytes don't belong in a JSON payload, and
-no endpoint to fetch the binary back out was requested for this sprint.
-That's a known gap for a later `GET /invoices/{id}/document` if needed.
+**`validation_warning` is trusted from Extraction at insert time, but
+recomputed on every edit.** `POST /invoices` just stores whatever
+`validation_warning` came in the payload -- this service doesn't re-derive
+it from the line items at creation time. `PATCH /invoices/{id}` does
+recompute it (`_compute_validation_warning` in `app/repository.py`, using
+the same tolerance logic as `extraction_service/app/validation.py`,
+duplicated rather than shared across services on purpose), so correcting a
+bad total through the edit form also clears a stale warning instead of
+leaving it stuck.
+
+**`document_binary` is never returned from the JSON endpoints** -- only
+`document_content_type` is. Raw bytes don't belong in a JSON payload.
+`GET /invoices/{id}/document` returns it separately as a raw response with
+the correct `Content-Type`, for the frontend's preview panel.
 
 ## Testing
 

@@ -7,7 +7,45 @@ from bson.binary import Binary
 from bson.errors import InvalidId
 from pymongo.collection import Collection
 
-from .schema import ExtractionInput, StatusUpdate
+from .schema import ExtractionInput, InvoiceFieldsUpdate, LineItem, StatusUpdate
+
+# Same tolerance the Extraction service uses for its own totals sanity
+# check -- duplicated here (not imported cross-service) so this service
+# can recompute validation_warning after a manual edit without depending
+# on Extraction's internals.
+_TOLERANCE_ABS = 0.01
+_TOLERANCE_REL = 0.01
+
+
+def _within_tolerance(a: float, b: float) -> bool:
+    diff = abs(a - b)
+    threshold = max(_TOLERANCE_ABS, _TOLERANCE_REL * max(abs(a), abs(b)))
+    return diff <= threshold
+
+
+def _compute_validation_warning(
+    line_items: list[LineItem], tax: Optional[float], subtotal: Optional[float], total: float
+) -> Optional[str]:
+    if not line_items:
+        return None
+
+    line_item_sum = sum(item.amount for item in line_items)
+    tax_val = tax or 0.0
+    expected_total = line_item_sum + tax_val
+
+    if not _within_tolerance(expected_total, total):
+        return (
+            f"Sum of line items ({line_item_sum:.2f}) plus tax ({tax_val:.2f}) = "
+            f"{expected_total:.2f}, which does not match the total ({total:.2f})."
+        )
+
+    if subtotal is not None and not _within_tolerance(subtotal, line_item_sum):
+        return (
+            f"Subtotal ({subtotal:.2f}) does not match the sum of line item "
+            f"amounts ({line_item_sum:.2f})."
+        )
+
+    return None
 
 
 class InvalidIdError(ValueError):
@@ -104,6 +142,44 @@ def get_invoice(collection: Collection, invoice_id: str) -> dict:
     if doc is None:
         raise InvoiceNotFoundError(invoice_id)
     return _to_out_dict(doc)
+
+
+def update_fields(collection: Collection, invoice_id: str, data: InvoiceFieldsUpdate) -> dict:
+    oid = _parse_object_id(invoice_id)
+    if collection.find_one({"_id": oid}, {"_id": 1}) is None:
+        raise InvoiceNotFoundError(invoice_id)
+
+    warning = _compute_validation_warning(data.line_items, data.tax, data.subtotal, data.total)
+
+    collection.update_one(
+        {"_id": oid},
+        {
+            "$set": {
+                "vendor_name": data.vendor_name,
+                "invoice_number": data.invoice_number,
+                "issue_date": _to_naive_utc(data.issue_date),
+                "due_date": _to_naive_utc(data.due_date),
+                "line_items": [item.model_dump() for item in data.line_items],
+                "subtotal": data.subtotal,
+                "tax": data.tax,
+                "total": data.total,
+                "currency": data.currency,
+                "validation_warning": warning,
+                "updated_at": _now(),
+            }
+        },
+    )
+    updated = collection.find_one({"_id": oid})
+    return _to_out_dict(updated)
+
+
+def get_document(collection: Collection, invoice_id: str) -> tuple[bytes, str]:
+    oid = _parse_object_id(invoice_id)
+    doc = collection.find_one({"_id": oid}, {"document_binary": 1, "document_content_type": 1})
+    if doc is None:
+        raise InvoiceNotFoundError(invoice_id)
+    content_type = doc.get("document_content_type") or "application/octet-stream"
+    return bytes(doc["document_binary"]), content_type
 
 
 def list_invoices(

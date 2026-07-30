@@ -55,3 +55,22 @@ class InvoiceListOut(BaseModel):
 class StatusUpdate(BaseModel):
     status: Literal["unpaid", "paid"]
     paid_date: Optional[datetime] = None
+
+
+class InvoiceFieldsUpdate(BaseModel):
+    """Body for PATCH /invoices/{id} -- editing the extracted fields.
+
+    Not partial: the frontend's edit form always submits every field
+    together, so this mirrors ExtractionInput rather than making everything
+    optional. status/paid_date go through PATCH /invoices/{id}/status instead.
+    """
+
+    vendor_name: str
+    invoice_number: str
+    issue_date: datetime
+    due_date: Optional[datetime] = None
+    line_items: List[LineItem] = Field(default_factory=list)
+    subtotal: Optional[float] = None
+    tax: Optional[float] = None
+    total: float
+    currency: Optional[str] = None

@@ -12,7 +12,7 @@ from pymongo.errors import PyMongoError
 
 from . import repository
 from .db import get_invoices_collection
-from .schema import ExtractionInput, InvoiceListOut, InvoiceOut, StatusUpdate
+from .schema import ExtractionInput, InvoiceFieldsUpdate, InvoiceListOut, InvoiceOut, StatusUpdate
 
 logger = logging.getLogger("invoice_data_service")
 
@@ -92,6 +92,31 @@ def list_invoices(
 def get_invoice(invoice_id: str, collection: Collection = Depends(get_invoices_collection)):
     try:
         return repository.get_invoice(collection, invoice_id)
+    except repository.InvalidIdError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except repository.InvoiceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Invoice '{invoice_id}' not found.") from exc
+
+
+@app.get("/invoices/{invoice_id}/document")
+def get_invoice_document(invoice_id: str, collection: Collection = Depends(get_invoices_collection)):
+    try:
+        content, content_type = repository.get_document(collection, invoice_id)
+    except repository.InvalidIdError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except repository.InvoiceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Invoice '{invoice_id}' not found.") from exc
+    return Response(content=content, media_type=content_type)
+
+
+@app.patch("/invoices/{invoice_id}", response_model=InvoiceOut)
+def update_invoice_fields(
+    invoice_id: str,
+    update: InvoiceFieldsUpdate,
+    collection: Collection = Depends(get_invoices_collection),
+):
+    try:
+        return repository.update_fields(collection, invoice_id, update)
     except repository.InvalidIdError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except repository.InvoiceNotFoundError as exc:

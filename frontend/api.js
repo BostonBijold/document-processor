@@ -39,6 +39,15 @@ const API = {
     return resp.json();
   },
 
+  async getDocumentBlob(id) {
+    const resp = await fetch(`${window.APP_CONFIG.DATA_URL}/invoices/${encodeURIComponent(id)}/document`);
+    if (!resp.ok) {
+      throw new Error(`Failed to load document (HTTP ${resp.status})`);
+    }
+    const blob = await resp.blob();
+    return { blob, contentType: resp.headers.get("content-type") || blob.type };
+  },
+
   async updateStatus(id, status) {
     const resp = await fetch(
       `${window.APP_CONFIG.DATA_URL}/invoices/${encodeURIComponent(id)}/status`,
@@ -51,6 +60,20 @@ const API = {
     if (!resp.ok) {
       const body = await resp.json().catch(() => null);
       throw new Error(body?.detail || `Failed to update status (HTTP ${resp.status})`);
+    }
+    return resp.json();
+  },
+
+  async updateFields(id, fields) {
+    const resp = await fetch(`${window.APP_CONFIG.DATA_URL}/invoices/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => null);
+      const detail = typeof body?.detail === "string" ? body.detail : JSON.stringify(body?.detail);
+      throw new Error(detail || `Failed to save changes (HTTP ${resp.status})`);
     }
     return resp.json();
   },
@@ -72,6 +95,11 @@ const Fmt = {
   date(value) {
     if (!value) return "—";
     return String(value).slice(0, 10);
+  },
+
+  // Like date(), but returns "" instead of "—" for <input type="date"> values.
+  dateInputValue(value) {
+    return value ? String(value).slice(0, 10) : "";
   },
 
   dateTime(value) {

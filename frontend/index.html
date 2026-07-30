@@ -3,35 +3,52 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Upload Invoice</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Invoices</title>
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
   <header>
     <span class="brand">Invoices</span>
-    <nav>
-      <a href="index.html" class="active">Upload</a>
-      <a href="invoices.html">Invoices</a>
-    </nav>
+    <span class="spacer"></span>
+    <input id="file-input" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" hidden />
+    <button id="upload-btn" type="button">+ Upload invoice</button>
   </header>
 
-  <main>
-    <h1>Upload an invoice</h1>
+  <div id="upload-status"></div>
 
-    <div class="card">
-      <form id="upload-form">
-        <input id="file-input" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" />
-        <button id="submit-btn" type="submit">Upload</button>
-      </form>
-      <p class="muted" id="hint">Accepts PDF, JPG, or PNG.</p>
-    </div>
+  <main class="app-layout">
+    <section class="list-panel">
+      <div class="filters">
+        <input id="vendor-filter" type="text" placeholder="Filter by vendor…" />
+        <select id="status-filter">
+          <option value="">All statuses</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="paid">Paid</option>
+          <option value="overdue">Overdue</option>
+        </select>
+        <button id="apply-filters" type="button">Apply</button>
+      </div>
 
-    <div id="status-area"></div>
-    <div id="result-area"></div>
+      <div id="list-status"></div>
+      <div id="accordion" class="accordion"></div>
+
+      <div class="pagination">
+        <button id="prev-page" class="secondary" type="button">← Prev</button>
+        <span id="page-info" class="muted"></span>
+        <button id="next-page" class="secondary" type="button">Next →</button>
+      </div>
+    </section>
+
+    <aside class="preview-panel">
+      <div class="preview-header">Document preview</div>
+      <div id="preview-body" class="preview-body">
+        <p class="muted">Select an invoice to preview its document.</p>
+      </div>
+    </aside>
   </main>
 
-  <script src="config.js"></script>
-  <script src="api.js"></script>
-  <script src="upload.js"></script>
+  <script src="config.js?v=3"></script>
+  <script src="api.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
